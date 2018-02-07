@@ -1,0 +1,28 @@
+---
+testcase:
+    project: "RedHatEnterpriseLinux"
+    title: "polarizer_py.metadata.testing"
+    id: ""
+    description: "Just a test"
+    # Normally, the test-steps can be left blank, as we can determine this programmatically
+    #test-steps:
+    #- test-step:
+    #  - test-step-column:
+    #    - parameter:
+    #        scope: "local"
+    #        name: "foo"
+    custom-fields:
+      caseimportance: "medium"
+      caseautomation: "automated"
+      caselevel: "component"
+      caseposneg: "positive"
+      casecomponent: ""
+      testtype: "functional"
+      subtype1: ""
+      subtype2: ""
+      tags: "comma,separated,values"
+    linked-workitems:
+    - linked-workitem:
+      - workitem-id: "RHEL7-23456"
+      - role-id: "verifies"
+    update: false
