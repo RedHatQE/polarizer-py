@@ -15,6 +15,7 @@ from typing import Mapping, Callable, Sequence, Dict
 from . logger import glob_logger as log
 from pprint import pprint
 from xml.etree import ElementTree as ET
+import tempfile
 
 # We can look for the configuration file in 2 places:
 # - The default which is in ~/.polarizer/polarizer-testcase.json|yml
@@ -169,74 +170,97 @@ def _get_test_steps(fn: Callable) -> Sequence:
     return test_step
 
 
-def metadata(cfg=config(), path=None, definition=None):
-    """
-    The decorator which specifies where the test definition yaml file lives.
+def write_xml(tid, qname, meta, update=False):
+    if tid == "" or update:
+        log.info("TODO: Test method {} will be added to TestCase import request".format(qname))
+        root = meta_to_tc_xml(qname, meta)
+        tree = ET.ElementTree(element=root)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", prefix="polarion-testcase-", dir="/tmp") as tf:
+            log.info("Created xml definition file in {}".format(tf.name))
+            tree.write(tf)
+        return tf.name
+    return ""
 
-    Unlike the java version which uses an annotation to generate the definition, the python version just uses a yaml
-    file which is then converted into the XML needed by Polarion.  The decorator simply takes a path to where this
-    definition lives.  The advantage to this is that:
 
-    - If the testcase_id is a keyword, it initially starts as "", but what happens when you get a new ID?
-    - If you want to update the definitions, if you have a keyword like update=True, how do you tell it to revert back?
+class MetaData:
+    definitions = {}
 
-    These are problems with the java version that will be fixed by doing something similar here.  Since we can edit a
-    plain text file in code (but we can not edit source code as in python decorators or java annotations), we can
-    automatically fill in the ID for the testcase, or turn off the update key in the file.
+    @classmethod
+    def metadata(cls, cfg=config(), path=None, definition=None):
+        """
+        The decorator which specifies where the test definition yaml file lives.
 
-    :param cfg: a dictionary containing configuration options
-    :param path: Path to where the yaml definition file is
-    :param definition: An optional configuration dictionary
-    :return: decorator
-    """
-    tc = _get_metadata_kwargs({"path": path, "definition": definition})
-    meta = tc["testcase"]
+        Unlike the java version which uses an annotation to generate the definition, the python version just uses a yaml
+        file which is then converted into the XML needed by Polarion.  The decorator simply takes a path to where this
+        definition lives.  The advantage to this is that:
 
-    # Set up the defaults
-    test_case_id = meta["id"]
-    update = meta["update"] if "update" in meta else False
-    project = meta["project"]
+        - If the testcase_id is a keyword, it initially starts as "", but what happens when you get a new ID?
+        - If you want to update the definitions, if you have a keyword like update=True, how do you tell it to revert back?
 
-    def outer(fn):
-        """Code here gets executed at decoration not invocation time"""
-        # get the mapping file, and see if the name from the metadata exists in it.
-        mapping = get_mapping(cfg["mapping"])
-        qname = qual_name(fn)
+        These are problems with the java version that will be fixed by doing something similar here.  Since we can edit a
+        plain text file in code (but we can not edit source code as in python decorators or java annotations), we can
+        automatically fill in the ID for the testcase, or turn off the update key in the file.
 
-        # Insert information about the function via reflection
-        meta["description"] = fn.__docstring__ if hasattr(fn, "__docstring__") else "No docstring for {}".format(qname)
-        meta["test-steps"] = _get_test_steps(fn)
-        _set_custom_defaults(meta)
+        :param cfg: a dictionary containing configuration options
+        :param path: Path to where the yaml definition file is
+        :param definition: An optional configuration dictionary
+        :return: decorator
+        """
+        tc = _get_metadata_kwargs({"path": path, "definition": definition})
+        meta = tc["testcase"]
 
-        def set_fn_in_mapping(imap: Mapping) -> Mapping:
-            imap[project] = {
-                "id": test_case_id,
-                "params": list(fn.__code__.co_varnames)
-            }
-            with open(cfg["mapping"], "w") as j:
-                json.dump(mapping, j, sort_keys=True, indent=2)
-            return mapping
+        # Set up the defaults
+        test_case_id = meta["id"]
+        update = meta["update"] if "update" in meta else False
+        project = meta["project"]
 
-        # If the qualified name is not in the mapping file, add it.
-        # If it is in mapping.json, check if the testcase_id is set for the project
-        if qname not in mapping:
-            mapping[qname] = {}
-            set_fn_in_mapping(mapping[qname])
-        elif project not in mapping[qname]:
+        def outer(fn):
+            """Code here gets executed at decoration not invocation time"""
+            # get the mapping file, and see if the name from the metadata exists in it.
+            mapping = get_mapping(cfg["mapping"])
+            qname = qual_name(fn)
+
+            # Insert information about the function via reflection
+            meta["description"] = fn.__docstring__ if hasattr(fn, "__docstring__") else "No docstring for {}".format(qname)
+            meta["test-steps"] = _get_test_steps(fn)
+            _set_custom_defaults(meta)
+
+            def set_fn_in_mapping(imap: Mapping) -> Mapping:
+                imap[project] = {
+                    "id": test_case_id,
+                    "params": list(fn.__code__.co_varnames)
+                }
+                with open(cfg["mapping"], "w") as j:
+                    json.dump(mapping, j, sort_keys=True, indent=2)
+                return mapping
+
+            # If the qualified name is not in the mapping file, add it.
+            # If it is in mapping.json, check if the testcase_id is set for the project
+            if qname not in mapping:
+                mapping[qname] = {}
                 set_fn_in_mapping(mapping[qname])
-        else:
-            log.debug("{} already in map file for project {}".format(qname, project))
+            elif project not in mapping[qname]:
+                    set_fn_in_mapping(mapping[qname])
+            else:
+                log.debug("{} already in map file for project {}".format(qname, project))
 
-        # Write out the dictionary to XML if id is "" or update is true.  These will be collected per project
-        entry_by_name = mapping[qname][project]
-        if entry_by_name["id"] == "" or update:
-            log.info("TODO: Test method {} will be added to TestCase import request".format(qname))
-            root = meta_to_tc_xml(qname, meta)
-            ET.dump(root)
+            # Write out the dictionary to XML if id is "" or update is true.  These will be collected per project
+            entry_by_name = mapping[qname][project]
+            if entry_by_name["id"] == "" or update:
+                log.info("TODO: Test method {} will be added to TestCase import request".format(qname))
 
-        @wraps(fn)
-        def inner(*args, **kwds):
-            """This gets called only when decorated method is invoked"""
-            return fn(*args, **kwds)
-        return inner
-    return outer
+                if project not in cls.definitions:
+                    cls.definitions[project] = {}
+                if qname not in cls.definitions[project]:
+                    cls.definitions[project][qname] = {}
+                cls.definitions[project][qname]["definition"] = write_xml(test_case_id, qname, meta, update)
+
+            @wraps(fn)
+            def inner(*args, **kwds):
+                """This gets called only when decorated method is invoked"""
+                return fn(*args, **kwds)
+            return inner
+        return outer
+
+
+metadata = MetaData.metadata
