@@ -113,8 +113,10 @@ def meta_to_tc_xml(name: str, meta: Mapping) -> ET.Element:
     """
     pprint(meta)
     root = ET.Element("testcase", attrib={"id": meta["id"]})
-    title = ET.SubElement(root, "title", text=name)
-    description = ET.SubElement(root, "description", text=meta["description"])
+    title = ET.SubElement(root, "title")
+    title.text = name
+    description = ET.SubElement(root, "description")
+    description.text = meta["description"]
     test_steps = ET.SubElement(root, "test-steps")
 
     test_step_cols = ET.SubElement(test_steps, "test-step-columns", attrib={"id": "step"})
@@ -153,7 +155,12 @@ def _get_test_steps(fn: Callable) -> Sequence:
     return test_step
 
 
-def write_xml(tid, qname, meta, update=False):
+def write_xml(path, node):
+    with open(path, "w+b") as x:
+        x.write(str.encode(node))
+
+
+def testcase_xml_node(tid, qname, meta, update=False):
     if tid == "" or update:
         log.info("TODO: Test method {} will be added to TestCase import request".format(qname))
         root = meta_to_tc_xml(qname, meta)
@@ -164,10 +171,34 @@ def write_xml(tid, qname, meta, update=False):
         tf = tempfile.NamedTemporaryFile(suffix=".xml", prefix="polarion-testcase-", dir="/tmp")
         log.info("Created xml definition file in {}".format(tf.name))
         tf.close()
-        with open(tf.name, "w+b") as x:
-            x.write(str.encode(node))
         return tf.name, root
-    return ""
+    return "", None
+
+
+def generate_import_xml(import_list: Dict, cfg=config()):
+    s_name = cfg["testcase"]["selector"]["name"]
+    s_val = cfg["testcase"]["selector"]["value"]
+    nodes = {}
+    for project, tcs in import_list.items():
+        parent = ET.Element("testcases", attrib={"project-id": project})
+        response_props = ET.SubElement(parent, "response-properties")
+        response_prop = ET.SubElement(response_props, "response-property", attrib={"name": s_name, "value": s_val})
+        for item in tcs:
+            qname = item["name"]
+            log.info("TODO: Test method {} will be added to TestCase import request".format(qname))
+            root = meta_to_tc_xml(qname, item)
+            parent.append(root)
+
+        parsed = ET.tostring(parent)
+        pretty = minidom.parseString(parsed)
+        node = pretty.toprettyxml(indent="  ")
+        # For some reason, using the NamedTemporaryFile in a with context didn't work
+        tf = tempfile.NamedTemporaryFile(suffix=".xml", prefix="polarion-testcase-", dir="/tmp")
+        log.info("Created xml definition file in {}".format(tf.name))
+        tf.close()
+        write_xml(tf.name, node)
+        nodes[project] = tf.name
+    return nodes
 
 
 def calc(kw, mtype=0):
@@ -216,32 +247,27 @@ def _get_metadata_definitions(def_path: str):
         return {}
 
     # Return a dictionary instead of a list, keyed by name.  This means names must be unique
-    return {d["testcase"]["name"]: d["testcase"] for d in defs}
+    testcases = {}
+    for d in defs:
+        tc = d["testcase"]
+        name = tc["name"]
+        project = tc["project"]
+        if name not in testcases:
+            testcases[name] = {}
+            if isinstance(project, str):
+                testcases[name][project] = tc
+            else:
+                for p in project:
+                    testcases[name][p] = tc
+    return testcases
 
 
-def compare_map_to_meta(mapping, meta):
-    """
-    There are 4 possibilities.
-
-    | map.id  | meta.id |
-    |---------|---------|------------------------------
-    | 0       | 0       | 0: neither are empty strings. Check equality, and warn if mismatch but do nothing
-    | 0       | 1       | 1: meta is empty. update meta with map_id
-    | 1       | 0       | 2: map is empty. update map with meta.id
-    | 1       | 1       | 4: both are empty. add to import testcase list
-
-    :param mapping:
-    :param meta:
-    :return:
-    """
-
-    def check(map_id, meta_id, choice=0):
-        choice |= 1 << 1 if map_id == "" else 0
-        choice |= 1 << 0 if meta_id == "" else 0
-        return choice
-
-
-
+def get_meta_from_dict(definitions: Mapping, qname: str, project: str) -> Dict:
+    if qname not in definitions:
+        return {}
+    if project not in definitions[qname]:
+        return {}
+    return definitions[qname][project]
 
 
 class MetaData:
@@ -249,7 +275,74 @@ class MetaData:
     Container class so that every function wrapped with @metadata can store information here
     """
     cfg = config()
+    mapping = get_mapping(cfg["mapping"])
     definitions = _get_metadata_definitions(cfg["definitions-path"])
+    import_list = {}
+
+    @classmethod
+    def update_definition(cls, qname: str, project: str, map_id: str):
+        """Edits the map_id in the id field of the definition file"""
+        meta = cls.definitions[qname][project]
+        meta["id"] = map_id
+
+    @classmethod
+    def update_mapping(cls, qname: str, project: str, meta_id: str):
+        """
+        Edits the mapping.json file id key with the meta_id value
+
+        :param qname:
+        :param project:
+        :param meta_id:
+        :return:
+        """
+        meta = get_meta_from_dict(cls.definitions["testcase"], qname, project)
+        if qname not in cls.mapping:
+            log.error("Could not find {} in mapping.json".format(qname))
+            cls.mapping[qname] = {project: {}}
+        if project not in cls.mapping[qname]:
+            cls.mapping[qname][project] = {}
+        cls.mapping[qname][project]["id"] = meta_id
+
+    @classmethod
+    def compare_map_to_meta(cls, qname: str, project: str, map_id: str, meta_id: str, update=False):
+        """
+        There are 4 possibilities.
+
+        | map.id  | meta.id |
+        |---------|---------|------------------------------
+        | 0       | 0       | 0: neither are empty strings. Check equality, and warn if mismatch but do nothing
+        | 0       | 1       | 1: meta is empty. update meta with map_id
+        | 1       | 0       | 2: map is empty. update map with meta.id
+        | 1       | 1       | 4: both are empty. add to import testcase list
+
+        :param qname:
+        :param project:
+        :param map_id:
+        :param meta_id:
+        :param update:
+        :return:
+        """
+
+        def check(choice=0):
+            choice |= 1 << 1 if map_id == "" else 0
+            choice |= 1 << 0 if meta_id == "" else 0
+            return choice
+
+        comparison = check()
+        if comparison == 0:
+            if map_id != meta_id: log.error("{} in map and {} in meta do not match".format(map_id, meta_id))
+        elif comparison == 1:
+            cls.update_definition(qname, project, map_id)
+        elif comparison == 2:
+            cls.update_mapping(qname, project, meta_id)
+        elif comparison == 3 or update:
+            if project not in cls.import_list:
+                cls.import_list[project] = []
+            metas = cls.import_list[project]
+            meta = get_meta_from_dict(cls.definitions, qname, project)
+            if not meta:
+                raise Exception("No metadata for {} in {}.  Can not create XML definition".format(qname, project))
+            metas.append(meta)
 
     @classmethod
     def _get_metadata(cls, kwargs: Dict, name: str):
@@ -277,38 +370,42 @@ class MetaData:
 
         def type1():
             meta_tc = kwargs["definition"]
-            def_tc = MetaData.definitions[name] if name in MetaData.definitions else {}
+            meta_tc["name"] = name
+            def_tc = cls.definitions[name] if name in cls.definitions else {}
 
-            # Who wins here?  The meta_tc will win if it is different from the definition file
-            for k, v in meta_tc.items():
-                if k == "update":
-                    continue
-                def_tc[k] = v
-            return def_tc
+            if not def_tc:
+                final = meta_tc
+            else:
+                for k, v in meta_tc.items():
+                    if k == "update":
+                        continue
+                    def_tc[k] = v
+                final = def_tc
+            final["title"] = name
+            if name not in cls.definitions:
+                cls.definitions[name] = {}
+            if isinstance(final["project"], str):
+                cls.definitions[name][final["project"]] = final
+            else:
+                for prj in final["project"]:
+                    cls.definitions[name][prj] = final
+            return cls.definitions[name]
 
         def type2():
             meta_path = kwargs["path"]
             if not os.path.exists(meta_path):
                 return {}
-            with open(meta_path, "r") as cfg:
-                defs = yaml.load(cfg)
+            defs = _get_metadata_definitions(meta_path)
             if defs is not None:
-                fltr = _fltr_definitions_by_name(name)
-                definition = list(filter(fltr, defs))
-                if len(definition) > 1:
-                    tc_def = definition[0]
-                    log.error("Found multiple entries with {} in {} file. Using {}".format(name, meta_path, tc_def))
-                    # Replace whatever is in definitions
-                    MetaData.definitions["definitions"][name] = tc_def
-                    return tc_def
-                if len(definition) == 0:
+                if name in defs:
+                    return defs[name]
+                else:
                     err = "No definition found for {} in file {}.".format(name, meta_path)
                     log.error(err)
                     raise Exception(err)
-                return definition[0]
 
         if mtype == 0:
-            return MetaData.definitions[name] if name in MetaData.definitions else {}
+            return cls.definitions[name] if name in cls.definitions else {"testcase": {}}
         elif mtype == 1:
             return type1()
         elif mtype == 2:
@@ -319,23 +416,6 @@ class MetaData:
             for k, v in path_tc.items():
                 def_tc[k] = v
             return def_tc
-
-    @classmethod
-    def save_xml_defs(cls, tid, meta, mapping, qname, project, update=False):
-        """
-        Write out the dictionary to XML if id is "" or update is true.  These will be collected per project
-
-        :return:
-        """
-        entry_by_name = mapping[qname][project]
-        if entry_by_name["id"] == "" or update:
-            if project not in cls.definitions:
-                cls.definitions[project] = {}
-            if qname not in cls.definitions[project]:
-                cls.definitions[project][qname] = {}
-            xml_path, root = write_xml(tid, qname, meta, update)
-            cls.definitions[project][qname]["definition"] = xml_path
-            cls.definitions[project][qname]["testcase"] = root
 
     @classmethod
     def metadata(cls, cfg=config(), path=None, definition=None):
@@ -362,73 +442,61 @@ class MetaData:
         def outer(fn):
             """Code here gets executed at decoration not invocation time"""
             qname = qual_name(fn)
-            tc = MetaData._get_metadata({"path": path, "definition": definition}, qname)
-            meta = tc["testcase"]
+            tcs = MetaData._get_metadata({"path": path, "definition": definition}, qname)
 
-            # Set up the defaults
-            test_case_id = meta["id"]
-            update = meta["update"] if "update" in meta else False
-            project = meta["project"]
-            mapping = get_mapping(cfg["mapping"])
+            for project in tcs:
+                meta = tcs[project]
+                # Set up the defaults
+                test_case_id = meta["id"]
+                update = meta["update"] if "update" in meta else False
+                mapping = cls.mapping
 
-            # Insert information about the function via reflection
-            meta["description"] = fn.__docstring__ if hasattr(fn, "__docstring__") else "No docstring for {}".format(
-                qname)
-            meta["test-steps"] = _get_test_steps(fn)
-            _set_custom_defaults(meta)
+                # Insert information about the function via reflection
+                is_doc = hasattr(fn, "__docstring__")
+                meta["description"] = fn.__docstring__ if is_doc else "No docstring for {}".format(qname)
+                meta["test-steps"] = _get_test_steps(fn)
+                _set_custom_defaults(meta)
+                cls.definitions[qname][project] = meta
 
-            def set_fn_in_mapping(imap: Mapping) -> Mapping:
-                imap[project] = {
-                    "id": test_case_id,
-                    "params": list(fn.__code__.co_varnames)
-                }
-                with open(cfg["mapping"], "w") as j:
-                    json.dump(mapping, j, sort_keys=True, indent=2)
-                return mapping
+                def set_fn_in_mapping(imap: Mapping) -> Mapping:
+                    imap[project] = {
+                        "id": test_case_id,
+                        "params": list(fn.__code__.co_varnames)
+                    }
+                    with open(cfg["mapping"], "w") as j:
+                        json.dump(mapping, j, sort_keys=True, indent=2)
+                    return mapping
 
-            # If the qualified name is not in the mapping file, add it.
-            # If it is in mapping.json, check if the testcase_id is set for the project
-            if qname not in mapping:
-                mapping[qname] = {}
-                set_fn_in_mapping(mapping[qname])
-            elif project not in mapping[qname]:
-                set_fn_in_mapping(mapping[qname])
-            else:
-                log.debug("{} already in map file for project {}".format(qname, project))
-                # Compare the meta defintion with the mapping definition
+                # Set up the mapping.json appropriately. If the qualified name is not in the mapping file, add it.
+                # If it is in mapping.json, check if the testcase_id is set for the project
+                if qname not in mapping:
+                    mapping[qname] = {}
+                    set_fn_in_mapping(mapping[qname])
+                elif project not in mapping[qname]:
+                    set_fn_in_mapping(mapping[qname])
+                else:
+                    log.debug("{} already in map file for project {}".format(qname, project))
+
+                # Compare the meta defintion with the mapping definition and do what is needed.  This will add functions
+                # to the cls.import_list as needed
                 map_id = mapping[qname][project]["id"]
-
-
-            MetaData.save_xml_defs(test_case_id, meta, mapping, qname, project, update)
+                cls.compare_map_to_meta(qname, project, map_id, test_case_id, update=update)
 
             @wraps(fn)
             def inner(*args, **kwds):
                 """This gets called only when decorated method is invoked"""
                 return fn(*args, **kwds)
-
             return inner
-
         return outer
 
     @classmethod
-    def make_testcase_xml(cls, selector_name, selector_val):
-        """
-        Creates the xml file that can be uploaded to polarion directly, or via polarizer
-
-        :return:
-        """
-        for project, val in cls.definitions.items():
-            testcases = ET.Element("testcases", tag={"project-id": project})
-            response_props = ET.SubElement(testcases, "response-properties")
-            tag = {"name": selector_name, "value": selector_val}
-            _ = ET.SubElement(response_props, "response-property", tag=tag)
-            testcases = []
-            for _, items in val.items():
-                testcases.append(items["testcase"])
+    def make_testcase_xml(cls):
+        return generate_import_xml(cls.import_list, cfg=cls.cfg)
 
     @classmethod
     def testcase_import(cls):
         """
+        Makes a call to polarizer
 
         :return:
         """
