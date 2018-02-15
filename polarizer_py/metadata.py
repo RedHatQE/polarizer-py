@@ -282,13 +282,13 @@ class MetaData:
     import_by = set()
 
     @classmethod
-    def update_definition(cls, qname: str, project: str, map_id: str):
+    def update_definition(cls, qname: str, project: str, map_id: str) -> None:
         """Edits the map_id in the id field of the definition file"""
         meta = cls.definitions[qname][project]
         meta["id"] = map_id
 
     @classmethod
-    def update_mapping(cls, qname: str, project: str, meta_id: str):
+    def update_mapping(cls, qname: str, project: str, meta_id: str) -> None:
         """
         Edits the mapping.json file id key with the meta_id value
 
@@ -306,7 +306,7 @@ class MetaData:
         cls.mapping[qname][project]["id"] = meta_id
 
     @classmethod
-    def compare_map_to_meta(cls, qname: str, project: str, map_id: str, meta_id: str, update=False):
+    def compare_map_to_meta(cls, qname: str, project: str, map_id: str, meta_id: str, update=False) -> None:
         """
         There are 4 possibilities.
 
@@ -347,7 +347,7 @@ class MetaData:
             metas.append(meta)
 
     @classmethod
-    def _get_metadata(cls, kwargs: Dict, name: str):
+    def _get_metadata(cls, kwargs: Dict, name: str) -> Dict:
         """
         The @metadata decorator can have 4 possibilities:
 
@@ -420,7 +420,7 @@ class MetaData:
             return def_tc
 
     @classmethod
-    def metadata(cls, cfg=config(), path=None, definition=None):
+    def metadata(cls, cfg=config(), path=None, definition=None) -> Callable:
         """
         The decorator which specifies where the test definition yaml file lives.
 

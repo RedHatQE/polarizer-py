@@ -170,13 +170,6 @@ The default definition file located in a path as determined by the configuration
     title: Defaults to name, but can be anything if empty
     id: ""
     description: Just a test
-    # Normally, the test-steps can be left blank, as we can determine this programmatically
-    #test-steps:
-    #- test-step:
-    #  - test-step-column:
-    #    - parameter:
-    #        scope: "local"
-    #        name: "foo"
     custom-fields:
       caseimportance: medium
       caseautomation: automated
@@ -204,13 +197,6 @@ argument to point to a custom definition file.
     title: Defaults to name, but can be anything if empty
     id: ""
     description: Just a test
-    # Normally, the test-steps can be left blank, as we can determine this programmatically
-    #test-steps:
-    #- test-step:
-    #  - test-step-column:
-    #    - parameter:
-    #        scope: "local"
-    #        name: "foo"
     custom-fields:
       caseimportance: medium
       caseautomation: automated
@@ -286,21 +272,48 @@ class MyTest:
 
 ```
 
-
-
 The example above shows three different ways to annotate your tests.
 
-The first is just a function, and it uses a custom path to look for the yaml definition
+The first is just a function, and it uses a custom path to look for the yaml definition.  The second uses the default 
+definition file as indicated by the configuration file.  The last shows how you can specify a python dict.  The main
+disadvantage with the last method is this is that the source code can not be edited to get the new ID after the import
+request has been made.
 
-This decorator will look up where the mapping.json file is from a json or yaml configuration file.  The decorator
-will determine if the qualified name of the function (eg the package.module.function_name) is in the mapping.json file 
-and then check what the "id" is for that project.
+So the author has to manually go back and update the ID 
 
-If mapping.json file is empty for the id (and the decorator testcase_id is an empty string also), then the decorator
-knows it will need to make an import request to Polarion to create a new TestCase.  To do so, it will create an XML 
-test definition file in the path indicated from the configuration's new-testcse-xml value.
+## How to test/play with it
 
-## What polarizer-vertx does
+Right now, the project is in very early alpha stage.  Some work needs to be done to detect which modules are using 
+polarizer_py.metadata.
+
+- First, import the metadata function into your module(s) and start decorating your test functions.
+- Open up a python shell
+- Import your modules that imported polarizer_py.metadata
+- Once you have imported all modules that use the @metadata decorator:
+  - from polarizer_py.metadata import MetaData
+
+From there, you can inspect the MetaData class.  For example, look at the MetaData.import_list.  If it is non-empty, 
+you can generate an XML file
+
+```python
+from metatest import testmeta   # by importing this module, any functions decorated with @metadata in testmeta will run
+
+from polarizer_py.metadata import MetaData  # MetaData class holds the info we need
+
+from pprint import pprint
+
+pprint(MetaData.import_list)
+
+MetaData.make_testcase_xml()
+```
+
+## Next steps: What polarizer-vertx does
+
+There's still a bit of work that needs to be done:
+
+- Import hooks to know what modules imported polarizer_py.metadata
+- upload the generated testcase definition xml to polarizer-vertx
+- Edit the definition yaml file from the returned mapping.json file
 
 A separate web service will take the XML testcase definition file and the mapping.json file, and return a new mapping.json
 file with the new TestCase ID
