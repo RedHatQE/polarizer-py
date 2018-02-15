@@ -12,7 +12,7 @@ import json
 import types
 from inspect import getfullargspec
 from typing import Mapping, Callable, Sequence, Dict
-from .logger import glob_logger as log
+from . logger import glob_logger as log
 from pprint import pprint
 from xml.etree import ElementTree as ET
 from xml.dom import minidom
@@ -41,7 +41,8 @@ def config():
             with open(p, "r") as cfg:
                 return fn(cfg)
     else:
-        raise Exception("Could not find configuration file for polarizer")
+        #raise Exception("Could not find configuration file for polarizer")
+        log.error("Could not find config")
 
 
 def _validate_meta(meta):
@@ -241,7 +242,7 @@ def _get_definitions_from_path(def_path: str) -> Dict:
     return defs
 
 
-def _get_metadata_definitions(def_path: str):
+def _get_metadata_definitions(def_path: str) -> Dict:
     defs = _get_definitions_from_path(def_path)
     if not defs:
         return {}
@@ -278,6 +279,7 @@ class MetaData:
     mapping = get_mapping(cfg["mapping"])
     definitions = _get_metadata_definitions(cfg["definitions-path"])
     import_list = {}
+    import_by = set()
 
     @classmethod
     def update_definition(cls, qname: str, project: str, map_id: str):
@@ -442,7 +444,7 @@ class MetaData:
         def outer(fn):
             """Code here gets executed at decoration not invocation time"""
             qname = qual_name(fn)
-            tcs = MetaData._get_metadata({"path": path, "definition": definition}, qname)
+            tcs = cls._get_metadata({"path": path, "definition": definition}, qname)
 
             for project in tcs:
                 meta = tcs[project]
@@ -458,7 +460,13 @@ class MetaData:
                 _set_custom_defaults(meta)
                 cls.definitions[qname][project] = meta
 
-                def set_fn_in_mapping(imap: Mapping) -> Mapping:
+                def set_fn_in_mapping(imap: Dict) -> Dict:
+                    """
+                    Writes the inner map conaining the id and params to the mapping json file
+
+                    :param imap:
+                    :return:
+                    """
                     imap[project] = {
                         "id": test_case_id,
                         "params": list(fn.__code__.co_varnames)

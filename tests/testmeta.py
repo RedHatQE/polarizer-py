@@ -1,4 +1,4 @@
-from polarizer_py.metadata import metadata
+from polarizer_py import metadata
 from polarizer_py.utils import get_file_dir
 from pathlib import Path
 
@@ -10,7 +10,6 @@ test_dir = Path(this_dir, "definitions")
 def test2(name: str) -> str:
     print("you passed in {}".format(name))
     return name + ": got it"
-"""
 
 
 class MyTest:
@@ -35,3 +34,8 @@ class MyTest:
     def test3(self, y, bar=""):
         print("Just seeing how it works as a method")
         return y + bar
+"""
+
+
+def foo():
+    print("hello")
