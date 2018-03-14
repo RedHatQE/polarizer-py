@@ -56,8 +56,6 @@ def makeTestCaseImportRequest(testcase: str, mapping: str, tcargs: str = None):
     with open(testcase, "r") as tcfile:
         data["testcase"] = tcfile.read()
 
-    data = json.dumps(data)
-
     if tcargs is None:
         # Look in default location
         home = Path.home()
@@ -65,6 +63,8 @@ def makeTestCaseImportRequest(testcase: str, mapping: str, tcargs: str = None):
 
     with open(tcargs, "r") as argfile:
         data["tcargs"] = argfile.read()
+
+    data = json.dumps(data)
 
     return makeUMBRequest(op, tag=tag, ack=ack, data=data)
 
@@ -74,6 +74,16 @@ def makeUMBRequest(op: str,
                    tag=None,
                    ack: bool = False,
                    data: Mapping[str, str] = None):
+    """
+    Creates a python dict representing the JSON object to be sent over the websocket
+
+    :param op:
+    :param _type:
+    :param tag:
+    :param ack:
+    :param data:
+    :return:
+    """
     if data is None:
         data = {}
     if tag is None:
@@ -92,7 +102,13 @@ async def serve(url: str = "/ws/xunit/import",
                 args_path: str=None,
                 xml_path: str=""):
     wsurl = "ws://localhost:9000{}".format(url)
-    req = makeXUnitImportRequest(xml_path, xargs=args_path)
+    # req = makeXUnitImportRequest(xml_path, xargs=args_path)
+    tp = '/home/stoner/Projects/testpolarize/'
+    tcpath = tp + 'testcases/PLATTP/com.github.redhatqe.rhsm.testpolarize.TestReq/testUpgrade.xml'
+    mapping = tp + 'mapping.json'
+    tcargs = '/home/stoner/test-polarizer-testcase.json'
+
+    req = makeTestCaseImportRequest(tcpath, mapping, tcargs=tcargs)
 
     print(req)
     print("=======================")
@@ -103,18 +119,23 @@ async def serve(url: str = "/ws/xunit/import",
         await websocket.send(body)
 
         count = 0
-        while count < 30:
+        while count < 15:
+            if count % 5 == 0:
+                print("Waited {} seconds".format(count * 2))
+            else:
+                print("Count is now {}".format(count))
             try:
-                response = await asyncio.wait_for(websocket.recv(), 2000)
+                # Have to use wait_for() here, otherwise websocket.recv will yield, effectively stopping the while loop
+                # Yup, asyncio is tricky :)  Also, in python 3.5 can't use yield from in an async function
+                response = await asyncio.wait_for(websocket.recv(), 2)
                 print("<", end='')
                 pprint(json.loads(response), indent=2, width=120)
             except asyncio.TimeoutError:
-                if count % 5 == 0:
-                    print("Waited {} seconds".format(count * 2))
-                count -= 1
+                count += 1
 
 
 if __name__ == "__main__":
     xunit = "/home/stoner/Projects/testpolarize/test-output/testng-polarion.xml"
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(serve(xml_path=xunit, args_path="/home/stoner/test-polarizer-xunit.json"))
+    loop.run_until_complete(serve(url='/ws/testcase/import',
+                                  xml_path=xunit, args_path="/home/stoner/test-polarizer-xunit.json"))
