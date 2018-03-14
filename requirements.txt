@@ -2,3 +2,4 @@ pyyaml
 rx
 pyxb
 toolz
+websockets
