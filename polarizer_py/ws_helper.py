@@ -1,4 +1,4 @@
-from typing import Mapping
+from typing import Mapping, Dict
 from uuid import uuid4
 from pathlib import Path
 import asyncio
@@ -98,17 +98,8 @@ def makeUMBRequest(op: str,
     }
 
 
-async def serve(url: str = "/ws/xunit/import",
-                args_path: str=None,
-                xml_path: str=""):
+async def serve(req: Dict, url: str = "/ws/xunit/import"):
     wsurl = "ws://localhost:9000{}".format(url)
-    # req = makeXUnitImportRequest(xml_path, xargs=args_path)
-    tp = '/home/stoner/Projects/testpolarize/'
-    tcpath = tp + 'testcases/PLATTP/com.github.redhatqe.rhsm.testpolarize.TestReq/testUpgrade.xml'
-    mapping = tp + 'mapping.json'
-    tcargs = '/home/stoner/test-polarizer-testcase.json'
-
-    req = makeTestCaseImportRequest(tcpath, mapping, tcargs=tcargs)
 
     print(req)
     print("=======================")
@@ -122,8 +113,6 @@ async def serve(url: str = "/ws/xunit/import",
         while count < 15:
             if count % 5 == 0:
                 print("Waited {} seconds".format(count * 2))
-            else:
-                print("Count is now {}".format(count))
             try:
                 # Have to use wait_for() here, otherwise websocket.recv will yield, effectively stopping the while loop
                 # Yup, asyncio is tricky :)  Also, in python 3.5 can't use yield from in an async function
@@ -135,7 +124,18 @@ async def serve(url: str = "/ws/xunit/import",
 
 
 if __name__ == "__main__":
-    xunit = "/home/stoner/Projects/testpolarize/test-output/testng-polarion.xml"
+    home = str(Path.home())
+    tp = home + '/Projects/testpolarize'
+
+    xunit = tp + "/test-output/testng-polarion.xml"
+    args_path = home + "/test-polarizer-xunit.json"
+    xreq = makeXUnitImportRequest(xunit, xargs=args_path)
+
+    tcpath = home + '/testcases.xml'
+    mapping = tp + '/mapping.json'
+    tcargs = home + '/test-polarizer-testcase.json'
+    tcreq = makeTestCaseImportRequest(tcpath, mapping, tcargs=tcargs)
+
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(serve(url='/ws/testcase/import',
-                                  xml_path=xunit, args_path="/home/stoner/test-polarizer-xunit.json"))
+    # loop.run_until_complete(serve(xreq, url='/ws/xunit/import'))
+    loop.run_until_complete(serve(tcreq, url='/ws/testcase/import'))
