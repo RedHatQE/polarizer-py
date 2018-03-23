@@ -102,9 +102,7 @@ def make_umb_request(op: str,
 async def serve(req: Dict, host: str = "rhsm-cimetrics.usersys.redhat.com", url: str = "/ws/xunit/import"):
     wsurl = "ws://{}:9000{}".format(host, url)
 
-    print(req)
-    print("=======================")
-    print(req["data"])
+    print("Sending request to {}".format(wsurl))
 
     async with websockets.connect(wsurl) as websocket:
         body = json.dumps(req)
@@ -153,8 +151,7 @@ if __name__ == "__main__":
     if choice == "xunit":
         req = make_xunit_import_request(xml, xargs=args_path)
         url_endpoint = "/ws/xunit/import"
-
-    if choice == "testcase":
+    elif choice == "testcase":
         mapping = opts.mapping
         if not mapping:
             raise Exception("Must provide file to --mapping for testcase type")
@@ -162,6 +159,8 @@ if __name__ == "__main__":
             raise Exception("{} not exist for --mapping")
         req = make_testcase_import_request(xml, mapping, tcargs=args_path)
         url_endpoint = "/ws/testcase/import"
+    else:
+        raise Exception("Unknown choice for --type selected")
 
     loop = asyncio.get_event_loop()
     if req is not None and url_endpoint is not None:
