@@ -7,7 +7,7 @@ import json
 from pprint import pprint
 
 
-def makeXUnitImportRequest(xunit: str, xargs: str = None):
+def make_xunit_import_request(xunit: str, xargs: str = None):
     """
     Creates a WebSocket request to the Polarizer UMB verticle to do a Polarion /import/xunit import
 
@@ -32,10 +32,10 @@ def makeXUnitImportRequest(xunit: str, xargs: str = None):
 
     data = json.dumps(data)
 
-    return makeUMBRequest(op, tag=tag, ack=ack, data=data)
+    return make_umb_request(op, tag=tag, ack=ack, data=data)
 
 
-def makeTestCaseImportRequest(testcase: str, mapping: str, tcargs: str = None):
+def make_testcase_import_request(testcase: str, mapping: str, tcargs: str = None):
     """
     Creates a WebSocket request  to the Polarizer UMB verticle to do a Polarion /import/testcase import
 
@@ -66,14 +66,14 @@ def makeTestCaseImportRequest(testcase: str, mapping: str, tcargs: str = None):
 
     data = json.dumps(data)
 
-    return makeUMBRequest(op, tag=tag, ack=ack, data=data)
+    return make_umb_request(op, tag=tag, ack=ack, data=data)
 
 
-def makeUMBRequest(op: str,
-                   _type: str= "na",
-                   tag=None,
-                   ack: bool = False,
-                   data: Mapping[str, str] = None):
+def make_umb_request(op: str,
+                     _type: str= "na",
+                     tag=None,
+                     ack: bool = False,
+                     data: Mapping[str, str] = None):
     """
     Creates a python dict representing the JSON object to be sent over the websocket
 
@@ -98,8 +98,8 @@ def makeUMBRequest(op: str,
     }
 
 
-async def serve(req: Dict, url: str = "/ws/xunit/import"):
-    wsurl = "ws://localhost:9000{}".format(url)
+async def serve(req: Dict, host: str = "rhsm-cimetrics.usersys.redhat.com", url: str = "/ws/xunit/import"):
+    wsurl = "ws://{}:9000{}".format(host, url)
 
     print(req)
     print("=======================")
@@ -110,7 +110,7 @@ async def serve(req: Dict, url: str = "/ws/xunit/import"):
         await websocket.send(body)
 
         count = 0
-        while count < 15:
+        while count < 150:
             if count % 5 == 0:
                 print("Waited {} seconds".format(count * 2))
             try:
@@ -129,13 +129,14 @@ if __name__ == "__main__":
 
     xunit = tp + "/test-output/testng-polarion.xml"
     args_path = home + "/test-polarizer-xunit.json"
-    xreq = makeXUnitImportRequest(xunit, xargs=args_path)
+    xreq = make_xunit_import_request(xunit, xargs=args_path)
 
-    tcpath = home + '/testcases.xml'
-    mapping = tp + '/mapping.json'
-    tcargs = home + '/test-polarizer-testcase.json'
-    tcreq = makeTestCaseImportRequest(tcpath, mapping, tcargs=tcargs)
+    if False:
+        tcpath = home + '/testcases.xml'
+        mapping = tp + '/mapping.json'
+        tcargs = home + '/test-polarizer-testcase.json'
+        tcreq = make_testcase_import_request(tcpath, mapping, tcargs=tcargs)
 
     loop = asyncio.get_event_loop()
-    # loop.run_until_complete(serve(xreq, url='/ws/xunit/import'))
-    loop.run_until_complete(serve(tcreq, url='/ws/testcase/import'))
+    loop.run_until_complete(serve(xreq, url='/ws/xunit/import'))
+    # loop.run_until_complete(serve(tcreq, url='/ws/testcase/import'))
