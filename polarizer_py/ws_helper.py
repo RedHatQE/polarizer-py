@@ -5,7 +5,8 @@ import asyncio
 import websockets
 import json
 from pprint import pprint
-
+import argparse
+import os
 
 def make_xunit_import_request(xunit: str, xargs: str = None):
     """
@@ -110,7 +111,7 @@ async def serve(req: Dict, host: str = "rhsm-cimetrics.usersys.redhat.com", url:
         await websocket.send(body)
 
         count = 0
-        while count < 150:
+        while count < 30:
             if count % 5 == 0:
                 print("Waited {} seconds".format(count * 2))
             try:
@@ -124,19 +125,41 @@ async def serve(req: Dict, host: str = "rhsm-cimetrics.usersys.redhat.com", url:
 
 
 if __name__ == "__main__":
-    home = str(Path.home())
-    tp = home + '/Projects/testpolarize'
+    parser = argparse.ArgumentParser(description="")
+    parser.add_argument("-p", "--xml-path", help="Path to xml file which will be imported")
+    parser.add_argument("-a", "--json-args", help="Path to the polarizer-xunit.json or polarizer-testcase.json")
+    parser.add_argument("-m", "--mapping", help="Path to the mapping.json file (only required for testcase type")
+    parser.add_argument("-t", "--type", choices=["xunit", "testcase"], help="type of import to make [xunit|testcase]")
+    parser.add_argument("-s", "--server", help="Hostname of polarizer", default="rhsm-cimetrics.usersys.redhat.com")
+    opts = parser.parse_args()
 
-    xunit = tp + "/test-output/testng-polarion.xml"
-    args_path = home + "/test-polarizer-xunit.json"
-    xreq = make_xunit_import_request(xunit, xargs=args_path)
+    xml = opts.xml_path
+    args_path = opts.json_args
+    choice = opts.type
+    if not opts.xml_path:
+        raise Exception("Must provide path to xml file")
+    if opts.xml_path and not os.path.exists(opts.xml_path):
+        raise Exception("{} does not exist for --xml-path".format(opts.xml_path))
+    if not opts.json_args:
+        raise Exception("Must provide --type of xunit or testcase")
+    if not choice:
+        raise Exception("Must provide a choice of xunit or testcase for --type")
 
-    if False:
-        tcpath = home + '/testcases.xml'
-        mapping = tp + '/mapping.json'
-        tcargs = home + '/test-polarizer-testcase.json'
-        tcreq = make_testcase_import_request(tcpath, mapping, tcargs=tcargs)
+    req = None
+    url_endpoint = None
+    if choice == "xunit":
+        req = make_xunit_import_request(xml, xargs=args_path)
+        url_endpoint = "/ws/xunit/import"
+
+    if choice == "testcase":
+        mapping = opts.mapping
+        if not mapping:
+            raise Exception("Must provide file to --mapping for testcase type")
+        if mapping and not os.path.exists(mapping):
+            raise Exception("{} not exist for --mapping")
+        req = make_testcase_import_request(xml, mapping, tcargs=args_path)
+        url_endpoint = "/ws/testcase/import"
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(serve(xreq, url='/ws/xunit/import'))
-    # loop.run_until_complete(serve(tcreq, url='/ws/testcase/import'))
+    if req is not None and url_endpoint is not None:
+        loop.run_until_complete(serve(req, host=opts.server, url=url_endpoint))
