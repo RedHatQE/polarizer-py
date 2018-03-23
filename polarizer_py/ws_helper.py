@@ -133,6 +133,9 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--server", help="Hostname of polarizer", default="rhsm-cimetrics.usersys.redhat.com")
     opts = parser.parse_args()
 
+    print("xml_path is {}".format(opts.xml_path))
+    print("{} exists is {}".format(opts.xml_path, os.path.exists(opts.xml_path)))
+
     xml = opts.xml_path
     args_path = opts.json_args
     choice = opts.type
