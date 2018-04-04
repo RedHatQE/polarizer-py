@@ -8,6 +8,7 @@ from pprint import pprint
 import argparse
 import os
 
+
 def make_xunit_import_request(xunit: str, xargs: str = None):
     """
     Creates a WebSocket request to the Polarizer UMB verticle to do a Polarion /import/xunit import
@@ -70,6 +71,16 @@ def make_testcase_import_request(testcase: str, mapping: str, tcargs: str = None
     return make_umb_request(op, tag=tag, ack=ack, data=data)
 
 
+def ws_test():
+    return {
+        "op": "testing",
+        "type": "string",
+        "tag": "12345",
+        "ack": False,
+        "data": "This is just a test"
+    }
+
+
 def make_umb_request(op: str,
                      _type: str= "na",
                      tag=None,
@@ -99,8 +110,11 @@ def make_umb_request(op: str,
     }
 
 
-async def serve(req: Dict, host: str = "rhsm-cimetrics.usersys.redhat.com", url: str = "/ws/xunit/import"):
-    wsurl = "ws://{}:9000{}".format(host, url)
+async def serve(req: Dict,
+                host: str = "rhsm-cimetrics.usersys.redhat.com",
+                url: str = "/ws/xunit/import",
+                port: int = 9000):
+    wsurl = "ws://{}:{}{}".format(host, port, url)
 
     print("Sending request to {}".format(wsurl))
 
@@ -127,21 +141,25 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--xml-path", help="Path to xml file which will be imported")
     parser.add_argument("-a", "--json-args", help="Path to the polarizer-xunit.json or polarizer-testcase.json")
     parser.add_argument("-m", "--mapping", help="Path to the mapping.json file (only required for testcase type")
-    parser.add_argument("-t", "--type", choices=["xunit", "testcase"], help="type of import to make [xunit|testcase]")
+    parser.add_argument("-t", "--type", choices=["xunit", "testcase", "test"], help="type of import to make [xunit|testcase]")
     parser.add_argument("-s", "--server", help="Hostname of polarizer", default="rhsm-cimetrics.usersys.redhat.com")
+    parser.add_argument("--port", help="Port for the websocket server", default=9000, type=int)
     opts = parser.parse_args()
 
-    print("xml_path is {}".format(opts.xml_path))
-    print("{} exists is {}".format(opts.xml_path, os.path.exists(opts.xml_path)))
+    try:
+        print("xml_path is {}".format(opts.xml_path))
+        print("{} exists is {}".format(opts.xml_path, os.path.exists(opts.xml_path)))
+    except TypeError:
+        pass
 
     xml = opts.xml_path
     args_path = opts.json_args
     choice = opts.type
-    if not opts.xml_path:
+    if not opts.xml_path and opts.type != 'test':
         raise Exception("Must provide path to xml file")
-    if opts.xml_path and not os.path.exists(opts.xml_path):
+    if opts.type != 'test' and opts.xml_path and not os.path.exists(opts.xml_path):
         raise Exception("{} does not exist for --xml-path".format(opts.xml_path))
-    if not opts.json_args:
+    if opts.type != 'test' and not opts.json_args:
         raise Exception("Must provide --type of xunit or testcase")
     if not choice:
         raise Exception("Must provide a choice of xunit or testcase for --type")
@@ -159,9 +177,13 @@ if __name__ == "__main__":
             raise Exception("{} not exist for --mapping")
         req = make_testcase_import_request(xml, mapping, tcargs=args_path)
         url_endpoint = "/ws/testcase/import"
+    elif choice == "test":
+        url_endpoint = "/ws"
+        req = ws_test()
+        opts.port = 4001
     else:
         raise Exception("Unknown choice for --type selected")
 
     loop = asyncio.get_event_loop()
     if req is not None and url_endpoint is not None:
-        loop.run_until_complete(serve(req, host=opts.server, url=url_endpoint))
+        loop.run_until_complete(serve(req, host=opts.server, url=url_endpoint, port=opts.port))
