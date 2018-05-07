@@ -131,7 +131,10 @@ async def serve(req: Dict,
                 # Yup, asyncio is tricky :)  Also, in python 3.5 can't use yield from in an async function
                 response = await asyncio.wait_for(websocket.recv(), 2)
                 print("<", end='')
-                pprint(json.loads(response), indent=2, width=120)
+                info = json.loads(response)
+                pprint(info, indent=2, width=120)
+                if 'info' in info and 'import-results' in info['info']:
+                    break
             except asyncio.TimeoutError:
                 count += 1
 
