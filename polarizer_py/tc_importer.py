@@ -7,6 +7,7 @@ from pprint import pprint
 import requests
 import argparse
 
+
 def git_compile(branch: str):
     git_cmd = "git checkout {}".format(branch)
     launch(git_cmd)
@@ -84,4 +85,4 @@ if __name__ == "__main__":
     pprint(mapping, indent=2)
 
     with open(opts.new_mapping_path, "w") as new_map:
-        new_map.write(json.dumps(mapping, indent=2))
+        new_map.write(json.dumps(mapping, indent=2, sort_keys=True))
