@@ -2,7 +2,8 @@ from pathlib import Path
 import os
 from modulefinder import ModuleFinder
 from typing import Generator, Union, Sequence
-
+from subprocess import Popen, PIPE, STDOUT
+import time
 
 def get_file_dir(fd: str, up: int=1) -> Path:
     p = Path(fd)
@@ -52,6 +53,31 @@ def run(project: str):
     for i in modules:
         print(i)
     return modules
+
+
+def launch(cmd: str, env=None, cwd=None, shell=False, timeout: int = 300):
+    if env is None:
+        env = os.environ
+    if cwd is None:
+        cwd = os.getcwd()
+    if isinstance(cmd, str) and shell is False:
+        cmd = cmd.split(" ")
+        cmd = list(filter(lambda x: x != '', cmd))
+    print("Executing command {}".format(cmd))
+
+    proc = Popen(cmd, stdout=PIPE, stderr=STDOUT, env=env, cwd=cwd, shell=shell)
+    out, err = proc.communicate()
+    ret = proc.poll()
+    if ret is not None and ret != 0:
+        print("Command Failed. Return code = {}".format(ret))
+    count = 0
+    while ret is None and count < timeout:
+        time.sleep(5)
+        count += 5
+        print("waiting for command '{}' to finish: {}".format(cmd, count))
+    output = out.decode(encoding='utf-8')
+    print(output)
+    return output, proc.returncode
 
 
 if __name__ == "__main__":

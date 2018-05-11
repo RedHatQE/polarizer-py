@@ -113,7 +113,7 @@ def make_umb_request(op: str,
 async def serve(req: Dict,
                 host: str = "rhsm-cimetrics.usersys.redhat.com",
                 url: str = "/ws/xunit/import",
-                port: int = 9000):
+                port: int = 9000) -> str:
     wsurl = "ws://{}:{}{}".format(host, port, url)
 
     print("Sending request to {}".format(wsurl))
@@ -123,6 +123,7 @@ async def serve(req: Dict,
         await websocket.send(body)
 
         count = 0
+        info = ""
         while count < 30:
             if count % 5 == 0:
                 print("Waited {} seconds".format(count * 2))
@@ -137,6 +138,7 @@ async def serve(req: Dict,
                     break
             except asyncio.TimeoutError:
                 count += 1
+        return info
 
 
 if __name__ == "__main__":

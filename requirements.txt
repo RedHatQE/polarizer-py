@@ -3,3 +3,5 @@ rx
 pyxb
 toolz
 websockets
+requests
+requests_toolbelt
