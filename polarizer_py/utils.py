@@ -4,6 +4,7 @@ from modulefinder import ModuleFinder
 from typing import Generator, Union, Sequence
 from subprocess import Popen, PIPE, STDOUT
 import time
+import shutil
 
 def get_file_dir(fd: str, up: int=1) -> Path:
     p = Path(fd)
@@ -80,8 +81,40 @@ def launch(cmd: str, env=None, cwd=None, shell=False, timeout: int = 300):
     return output, proc.returncode
 
 
+def remove(substr: str, replace: str,  file: str, tmp: str):
+    print("in file {}".format(file))
+    with open(file, "r") as java:
+        with open(tmp, "w") as temp:
+            for i, line in enumerate(java.readlines()):
+                if substr in line:
+                    newline = line.replace(substr, replace)
+                    print("Removing {} from {}".format(substr, line))
+                    print("line {} is now: {}".format(i, newline))
+                    temp.write(newline)
+                else:
+                    temp.write(line)
+
+    shutil.move(tmp, file)
+
+
 if __name__ == "__main__":
-    import sys
-    args = sys.argv
-    run(args[1])
+    rhsm_qe = "/home/stoner/Projects/rhsm-qe/src/rhsm/cli/tests"
+    from pathlib import Path
+    ls = Path(rhsm_qe)
+    java = [j for j in list(ls.glob("**/*.java")) if j.is_file()]
+    for j in java:
+        tmp = "/tmp/{}".format(j.name)
+        remove('DefTypes.Role.VERIFIES', "DefTypes.Role.IS_VERIFIED_BY", str(j), tmp)
+
+    if False:
+        import argparse
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-s", "--substr", help="Text to search for and replace")
+        parser.add_argument("-r", "--replace", help="Text to replace if substr is found")
+        parser.add_argument("-f", "--file", help="File to search")
+        parser.add_argument("-t", "--temp", help="Temporary file")
+        opts = parser.parse_args()
+
+        remove(opts.substr, opts.replace, opts.file, opts.temp)
 

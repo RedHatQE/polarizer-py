@@ -116,7 +116,7 @@ async def serve(req: Dict,
                 port: int = 9000) -> str:
     wsurl = "ws://{}:{}{}".format(host, port, url)
 
-    print("Sending request to {}".format(wsurl))
+    # print("Sending request to {}".format(wsurl))
 
     async with websockets.connect(wsurl) as websocket:
         body = json.dumps(req)
@@ -124,17 +124,16 @@ async def serve(req: Dict,
 
         count = 0
         info = ""
-        while count < 30:
-            if count % 5 == 0:
-                print("Waited {} seconds".format(count * 2))
+        while count < 120:
             try:
                 # Have to use wait_for() here, otherwise websocket.recv will yield, effectively stopping the while loop
                 # Yup, asyncio is tricky :)  Also, in python 3.5 can't use yield from in an async function
                 response = await asyncio.wait_for(websocket.recv(), 2)
-                print("<", end='')
+                # print("<", end='')
                 info = json.loads(response)
-                pprint(info, indent=2, width=120)
-                if 'info' in info and 'import-results' in info['info']:
+                # pprint(info, indent=2, width=120)
+                if 'info' in info:
+                    # print("Breaking from while loop")
                     break
             except asyncio.TimeoutError:
                 count += 1
@@ -150,12 +149,6 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--server", help="Hostname of polarizer", default="rhsm-cimetrics.usersys.redhat.com")
     parser.add_argument("--port", help="Port for the websocket server", default=9000, type=int)
     opts = parser.parse_args()
-
-    try:
-        print("xml_path is {}".format(opts.xml_path))
-        print("{} exists is {}".format(opts.xml_path, os.path.exists(opts.xml_path)))
-    except TypeError:
-        pass
 
     xml = opts.xml_path
     args_path = opts.json_args
@@ -189,6 +182,10 @@ if __name__ == "__main__":
     else:
         raise Exception("Unknown choice for --type selected")
 
+    async def _serve():
+        info = await serve(req, host=opts.server, url=url_endpoint, port=opts.port)
+        print(json.dumps(info, sort_keys=True, indent=2))
+
     loop = asyncio.get_event_loop()
     if req is not None and url_endpoint is not None:
-        loop.run_until_complete(serve(req, host=opts.server, url=url_endpoint, port=opts.port))
+        loop.run_until_complete(_serve())

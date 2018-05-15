@@ -82,7 +82,7 @@ if __name__ == "__main__":
 
     jresp = json.loads(resp.text)
     mapping = jresp["mapping"]
-    pprint(mapping, indent=2)
+    pprint(jresp, indent=2)
 
     with open(opts.new_mapping_path, "w") as new_map:
         new_map.write(json.dumps(mapping, indent=2, sort_keys=True))
