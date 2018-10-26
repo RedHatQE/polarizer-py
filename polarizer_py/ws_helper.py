@@ -7,7 +7,7 @@ import json
 from pprint import pprint
 import argparse
 import os
-
+from os.path import expanduser
 
 def make_xunit_import_request(xunit: str, xargs: str = None):
     """
@@ -150,13 +150,13 @@ if __name__ == "__main__":
     parser.add_argument("--port", help="Port for the websocket server", default=9000, type=int)
     opts = parser.parse_args()
 
-    xml = opts.xml_path
-    args_path = opts.json_args
+    xml = expanduser(opts.xml_path)
+    args_path = expanduser(opts.json_args)
     choice = opts.type
     if not opts.xml_path and opts.type != 'test':
         raise Exception("Must provide path to xml file")
     if opts.type != 'test' and opts.xml_path and not os.path.exists(opts.xml_path):
-        raise Exception("{} does not exist for --xml-path".format(opts.xml_path))
+        raise Exception("{0} does not exist for --xml-path".format(opts.xml_path))
     if opts.type != 'test' and not opts.json_args:
         raise Exception("Must provide --type of xunit or testcase")
     if not choice:
@@ -168,11 +168,11 @@ if __name__ == "__main__":
         req = make_xunit_import_request(xml, xargs=args_path)
         url_endpoint = "/ws/xunit/import"
     elif choice == "testcase":
-        mapping = opts.mapping
+        mapping = expanduser(opts.mapping)
         if not mapping:
             raise Exception("Must provide file to --mapping for testcase type")
         if mapping and not os.path.exists(mapping):
-            raise Exception("{} not exist for --mapping")
+            raise Exception("{0} not exist for --mapping".format(mapping))
         req = make_testcase_import_request(xml, mapping, tcargs=args_path)
         url_endpoint = "/ws/testcase/import"
     elif choice == "test":
