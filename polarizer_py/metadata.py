@@ -98,9 +98,9 @@ def get_mapping(map_path):
 
 def qual_name(obj) -> str:
     if isinstance(obj, types.ModuleType):
-        return "{}.{}".format(obj.__package__, obj.__name__)
+        return "{}.{}".format(obj.__package__, obj.__qualname__)
     else:
-        return "{}.{}".format(obj.__module__, obj.__name__)
+        return "{}.{}".format(obj.__module__, obj.__qualname__)
 
 
 def meta_to_tc_xml(name: str, meta: Mapping) -> ET.Element:
