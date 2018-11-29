@@ -8,6 +8,6 @@ setup(
     url='https://github.com/RedHatQE/polarizer-py',
     license='Apache-2.0',
     author=['Sean Toner','Jan Stavel'],
-    author_email=['stoner@redhat.com','jstavel@redhat.com']
+    author_email=['stoner@redhat.com','jstavel@redhat.com'],
     description='Metadata decorator for polarizer services'
 )
